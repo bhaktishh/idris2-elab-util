@@ -7,6 +7,7 @@ module Doc.Enum2
 
 import Data.Vect.Quantifiers
 import Doc.Enum1
+import Language.Reflection.Pretty
 import Language.Reflection.Syntax.Ops
 import Language.Reflection.Util
 

@@ -7,6 +7,7 @@ therefore need some module noise to get started.
 module Doc.Enum1
 
 import Language.Reflection.Util
+import Language.Reflection.Pretty
 
 %language ElabReflection
 ```

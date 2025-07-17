@@ -31,7 +31,7 @@ to provide this functionality. The following
 command sets up our REPL for the experiments in this section:
 
 ```repl
-> rlwrap idris2 --find-ipkg src/Doc/Inspect.idr
+> rlwrap idris2 --find-ipkg src/Doc/Inspect.md
 ```
 
 ## Quotes
