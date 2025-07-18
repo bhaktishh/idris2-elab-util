@@ -10,30 +10,42 @@ import Data.Vect
 
 %language ElabReflection
 
-ttImpCouldBeSame : (TTImp, TTImp) -> Bool
-ttImpCouldBeSame (IVar _ n1, IVar _ n2) = ?ithinkineedelab
+ttImpCouldBeSame : Elaboration m => (TTImp, TTImp) -> m Bool
+ttImpCouldBeSame (IVar _ n1, IVar _ n2) = ?ejksdfgv
 ttImpCouldBeSame _ = ?idk
 
-appArgSame : {a : _} -> {b : _} -> (AppArg a, AppArg b) -> Bool 
+appArgSame : Elaboration m => {a : _} -> {b : _} -> (AppArg a, AppArg b) -> m Bool 
 appArgSame (Regular t1, Regular t2) = ttImpCouldBeSame (t1, t2)
 appArgSame (NamedApp _ t1, NamedApp _ t2) = ttImpCouldBeSame (t1, t2)
 appArgSame (AutoApp t1, AutoApp t2) = ttImpCouldBeSame (t1, t2)
-appArgSame _ = False 
+appArgSame _ = pure False 
 
-allAppArgSame : {vs : Vect n Arg} -> AppArgs vs -> AppArgs vs -> Bool 
-allAppArgSame {vs=[]} _ _ = True
-allAppArgSame {vs=x::xs} (a :: as) (b :: bs) = appArgSame (a, b) && allAppArgSame {vs=xs} as bs 
+allAppArgSame : Elaboration m => {vs : Vect n Arg} -> AppArgs vs -> AppArgs vs -> m Bool 
+allAppArgSame {vs=[]} _ _ = pure True
+allAppArgSame {vs=x::xs} (a :: as) (b :: bs) = do
+	here <- appArgSame (a, b)
+	there <- allAppArgSame {vs=xs} as bs
+	pure $ here && there
 
-conTySame : {vs : Vect n Arg} -> Con n vs -> Con n vs -> Bool 
+conTySame : Elaboration m => {vs : Vect n Arg} -> Con n vs -> Con n vs -> m Bool 
 conTySame {vs} (MkCon _ _ _ a) (MkCon _ _ _ b) = allAppArgSame a b
 
-generateCases : {vs : Vect n Arg} -> List (Con n vs) -> Maybe (List (Con n vs, Con n vs))
-generateCases [] = Just []
-generateCases [x] = Just [(x,x)]
-generateCases (x :: y :: xs) = 
-  let xfst  = ((x, x) :: map (x,) (filter (\x' => conTySame x x') (y :: xs))) in
-  let xfst'  = if conTySame y x then xfst ++ [(y, x)] else xfst in 
-  (xfst ++) <$> if null xs then Just [(y, y)] else generateCases (y :: xs)
+doFilter : Elaboration m => {vs : Vect n Arg} -> (Con n vs) -> List (Con n vs) -> m (List (Con n vs))
+doFilter x [] = pure []
+doFilter {vs=vs} x (c::cs) = do 
+	x' <- conTySame x c
+	rest <- doFilter x cs
+	if x' then pure (c :: rest) else pure rest  
+
+generateCases : Elaboration m => {vs : Vect n Arg} -> List (Con n vs) -> m (Maybe (List (Con n vs, Con n vs)))
+generateCases [] = pure $ Just []
+generateCases [x] = pure $ Just [(x,x)]
+generateCases {vs=vs} (x :: y :: xs) = do 
+  filtered <- doFilter {vs=vs} x (y :: xs)
+  let xfst  = ((x, x) :: map (x,) filtered)
+  b <- conTySame y x 
+  let xfst'  = if b then xfst ++ [(y, x)] else xfst
+  (xfst ++) <$> if null xs then pure (Just (Prelude.Basics.(::) (y, y) [])) else generateCases (y :: xs)
 
 appToName : String -> Maybe Name -> Name 
 appToName s (Just $ NS ns n) = NS ns (appToName s (Just n))
@@ -51,80 +63,46 @@ inConTy : {vs : Vect n Arg} -> Maybe Name -> Con n vs -> Bool
 inConTy {vs=vs} (Just n) _ = any (\a => ttImpCouldBeSame (var n, a.type)) vs
 inConTy Nothing _ = False 
 
--- getConstraints :: List IAnnParam -> List ITm
--- getConstraints [] = []
--- getConstraints (IAnnParam (v, ITyTy) _ : xs) = ITmCon "DecEq" [ITmVar v] : getConstraints xs
--- getConstraints (IAnnParam (v, ITyFunc args) _ : xs) = getFuncConstraint v args [] [] : getConstraints xs
--- getConstraints (_ : xs) = getConstraints xs
-
--- getFuncConstraint :: String -> List (Maybe String, ITy) -> List (Maybe String, ITy) -> List String -> ITm
--- getFuncConstraint fv args acc facc = case unsnoc args of
---   Just (xs, x@(Just v, _)) -> getFuncConstraint fv xs (x : acc) (v : facc)
---   Just (xs, (Nothing, _)) -> getFuncConstraint fv xs acc facc
---   Nothing -> ITmTy (ITyFunc (acc ++ [(Nothing, ITyTm $ ITmCon "DecEq" [ITmFuncCall (ITmVar fv) (map ITmVar facc)])]))
-getFuncConstraint : Maybe Name -> TTImp -> TTImp -> List (Maybe Name, TTImp) -> List Name -> Arg 
-getFuncConstraint = ?wejfdk
+getFuncConstraint : Maybe Name -> Name -> TTImp -> TTImp -> List (Maybe Name, TTImp) -> List Name -> Arg
+getFuncConstraint n mn argTy (IPi _ _ _ n' arg' ret') acc facc = getFuncConstraint n mn argTy ret' ((n', arg') :: acc) (fromMaybe (UN Underscore) n' :: facc)
+getFuncConstraint n mn argTy _ acc facc = 
+	let fst : TTImp = IApp EmptyFC (var "DecEq") (foldl (IApp EmptyFC) (var (fromMaybe (UN Underscore) n)) (map var facc)) in 
+		MkArg MW ExplicitArg n (foldr (.->) fst (map (\(n, t) => MkArg MW ExplicitArg n t) acc))
 
 getConstraints : List Arg -> List Arg 
 getConstraints [] = []
 getConstraints (MkArg _ _ n (IType _) :: xs) = MkArg MW AutoImplicit Nothing (var "DecEq" .$ var (fromMaybe (UN Underscore) n)) :: getConstraints xs 
-getConstraints (MkArg _ _ n (IPi _ _ _ mn argTy retTy) :: xs) = getFuncConstraint mn argTy retTy [] [] :: getConstraints xs
+getConstraints (MkArg _ _ n (IPi _ _ _ mn argTy retTy) :: xs) = getFuncConstraint n (fromMaybe (UN Underscore) mn) argTy retTy [] [] :: getConstraints xs
 getConstraints (_ :: xs) = getConstraints xs 
 
-export %inline
-deriveDecEq : Elaboration m => TypeInfo -> m ()
-deriveDecEq ti = 
+deriveDecEqDef : Elaboration m => TypeInfo -> m Decl 
+deriveDecEqDef ti =
 	let Just cases = generateCases ti.cons 
-	  | Nothing => fail "oupsi" in
+	  | Nothing => ?ejkdfg in
 	let 
 		splitCons : {vs : Vect n Arg} -> Con n vs -> List (Maybe Name, Bool)
 		splitCons {vs = vs} c = toList $ map (\(MkArg _ _ n ty) => (n, not (ty == type) && not (inConTy n c))) (snd $ Data.Vect.filter (\(MkArg _ i _ _) => i == ExplicitArg) c.args)
 
 		mkConTm : {vs : Vect n Arg} -> String -> Con n vs -> TTImp 
 		mkConTm i c = foldl (.$) (var c.name) (map (\(n, b) => if b then (var $ appToName i n) else (var $ fromMaybe (UN Underscore) n)) (splitCons c))
-
-		implicits = map (\(MkArg x _ n ty) => MkArg x ImplicitArg n ty) ti.args
-
-		mkClaim : ITy -> Decl 
-		mkClaim ty = IClaim (MkFCVal EmptyFC (MkIClaimData { 
-			rig = MW, 
-			vis = Export, 
-			opts = [Inline],
-			type = ty
-		}))
-
-		mkClaimTy : TTImp -> List Arg -> TTImp 
-		mkClaimTy = foldr (.->) 
-
-		
 	in 
-		?wjek
+		?ejrkdfg
 
+deriveDecEqClaim : TypeInfo -> Decl 
+deriveDecEqClaim ti =
+	let 
+		implicits = toList $ map (\(MkArg x _ n ty) => MkArg x ImplicitArg n ty) ti.args
+		constraints = getConstraints (toList ti.args)
+		final = var "DecEq" .$ ((foldl (.$) (var ti.name) (map var ti.argNames)))
+		prev = implicits ++ constraints 
 
--- case generateCases iTyDeclConstructors of
---       Nothing -> error "this type probably does not have decidable equality, soz"
---       Just cases ->
---         let hasTyTy c = map (\(IAnnParam (v, ty) _) -> (v, ty `notElem` dontDoTheseTypes && not (inConTy v (iConTy c)))) $ filter (\(IAnnParam (_, _) b) -> b) (iConArgs c)
---             tms i c = ITmCon (iConName c) (map (\(v, b) -> if b then ITmVar (v ++ i) else ITmVar v) (hasTyTy c))
---             implicits = map (\(IAnnParam (v, ty) _) -> IAnnParam (v, ty) False) iTyDeclParams
---          in Impl
---               { iImplicits = implicits,
---                 iConstraints = getConstraints iTyDeclParams,
---                 iSubject = ITmCon iTyDeclName (map (ITmVar . getIAnnParamVar) iTyDeclParams),
---                 iBody = concatMap (getCases . \(x, y) -> (tms "1" x, tms "2" y)) cases
---               }
+		claimTy = foldr (.->) final prev 
+	in
+		interfaceHint Public "decEq" claimTy
 
-
-
--- -- this is the toplevel generation function. `derive` itself will do the declarations, you just return the toplevel stuff here. 
-
--- export %inline
--- DecEq : List Name -> ParamTypeInfo -> Res (List TopLevel)
--- DecEq xs (MkParamTypeInfo (MkTypeInfo {name, arty, args, argNames, cons}) pat pnames pcons pargs) = ?huh
-
-
--- tySame : (String, Vect n Arg) -> (String, Vect n Arg) -> Bool 
--- tySame (c1, args1) (c2, args2) = c1 == c2 && all argSame (zip args1 args2)
+export %inline
+deriveDecEq : Elaboration m => TypeInfo -> m ()
+deriveDecEq ti = declare [deriveDecEqClaim ti]
 
 decEqInfo : TypeInfo 
 decEqInfo = MkTypeInfo
@@ -192,6 +170,8 @@ D1Info = MkTypeInfo
           }
       ]
   }
+
+%runElab deriveDecEq D1Info
 
 x = `[ 
 	export %inline 
@@ -303,3 +283,290 @@ vectInfo = MkTypeInfo
           }
       ]
   }
+
+data MyCurse : (a : Type) -> (b : (x : a) -> Type) -> (p : (x : a) -> (y : (b x)) -> Type) -> Type where 
+	MkMyCurse : {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> (x : a) -> (y : (b x)) -> (pf : (p x y)) -> MyCurse a b p
+
+myCurseInfo = MkTypeInfo
+  { name = "Derive.DecEq.MyCurse"
+  , arty = 3
+  , args =
+      [ MkArg MW ExplicitArg (Just "a") type
+      , MkArg
+          MW
+          ExplicitArg
+          (Just "b")
+          (MkArg MW ExplicitArg (Just "x") (var "a") .-> type)
+      , MkArg
+          MW
+          ExplicitArg
+          (Just "p")
+          (    MkArg MW ExplicitArg (Just "x") (var "a")
+           .-> MkArg MW ExplicitArg (Just "y") (var "b" .$ var "x")
+           .-> type)
+      ]
+  , argNames = ["a", "b", "p"]
+  , cons =
+      [ MkCon
+          { name = "Derive.DecEq.MkMyCurse"
+          , arty = 6
+          , args =
+              [ MkArg MW ImplicitArg (Just "a") type
+              , MkArg
+                  MW
+                  ImplicitArg
+                  (Just "b")
+                  (MkArg MW ExplicitArg (Just "x") (var "a") .-> type)
+              , MkArg
+                  MW
+                  ImplicitArg
+                  (Just "p")
+                  (    MkArg MW ExplicitArg (Just "x") (var "a")
+                   .-> MkArg MW ExplicitArg (Just "y") (var "b" .$ var "x")
+                   .-> type)
+              , MkArg MW ExplicitArg (Just "x") (var "a")
+              , MkArg MW ExplicitArg (Just "y") (var "b" .$ var "x")
+              , MkArg MW ExplicitArg (Just "pf") (var "p" .$ var "x" .$ var "y")
+              ]
+          , typeArgs = [Regular (var "a"), Regular (var "b"), Regular (var "p")]
+          }
+      ]
+  }
+
+myCurseDer = `[
+	export %inline 
+	decEq : {a : Type} -> {b : (x : a) -> Type} -> {p : (x : a) -> (y : (b x)) -> Type} -> ((DecEq a)) => ((x : a) -> (DecEq (b x))) => ((x : a) -> (y : (b x)) -> (DecEq (p x y))) => DecEq ((MyCurse a b p)) 
+	decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) with (decEq x1 x2)
+		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | (Yes Refl)  with (decEq y1 y2)
+			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | (Yes Refl) | (Yes Refl)  with (decEq pf1 pf2)
+				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf1) | (Yes Refl) | (Yes Refl) | (Yes Refl)  = (Yes Refl)
+				decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y1 pf2) | (Yes Refl) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
+					((Refl)) => (Refl)))))
+			decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x1 y2 pf2) | (Yes Refl) | (No prf)  = (No (\h => (prf (case (h) of
+				((Refl)) => (Refl)))))
+		decEq (MkMyCurse x1 y1 pf1) (MkMyCurse x2 y2 pf2) | (No prf)  = (No (\h => (prf (case (h) of
+			((Refl)) => (Refl)))))
+]
+
+myCurseDerInfo : List Decl 
+myCurseDerInfo = [ IClaim
+    (MkFCVal EmptyFC (MkIClaimData
+       { rig = MW
+       , vis = Export
+       , opts = [Inline]
+       , type =
+           mkTy
+             { name = "decEq"
+             , type =
+                     MkArg MW ImplicitArg (Just "a") type
+                 .-> MkArg
+                       MW
+                       ImplicitArg
+                       (Just "b")
+                       (MkArg MW ExplicitArg (Just "x") (var "a") .-> type)
+                 .-> MkArg
+                       MW
+                       ImplicitArg
+                       (Just "p")
+                       (    MkArg MW ExplicitArg (Just "x") (var "a")
+                        .-> MkArg
+                              MW
+                              ExplicitArg
+                              (Just "y")
+                              (var "b" .$ var "x")
+                        .-> type)
+                 .-> MkArg MW AutoImplicit Nothing (var "DecEq" .$ var "a")
+                 .-> MkArg
+                       MW
+                       AutoImplicit
+                       Nothing
+                       (    MkArg MW ExplicitArg (Just "x") (var "a")
+                        .-> var "DecEq" .$ (var "b" .$ var "x"))
+                 .-> MkArg
+                       MW
+                       AutoImplicit
+                       Nothing
+                       (MkArg MW ExplicitArg (Just "x") (var "a")
+                        .-> MkArg
+                              MW
+                              ExplicitArg
+                              (Just "y")
+                              (var "b" .$ var "x")
+                        .-> var "DecEq" .$ (var "p" .$ var "x" .$ var "y"))
+                 .->    var "DecEq"
+                     .$ (var "MyCurse" .$ var "a" .$ var "b" .$ var "p")
+             }
+       }))
+, IDef
+    emptyFC
+    "decEq"
+    [ withClause
+        { lhs =
+               var "decEq"
+            .$ (   var "MkMyCurse"
+                .$ bindVar "x1"
+                .$ bindVar "y1"
+                .$ bindVar "pf1")
+            .$ (   var "MkMyCurse"
+                .$ bindVar "x2"
+                .$ bindVar "y2"
+                .$ bindVar "pf2")
+        , rig = MW
+        , wval = var "decEq" .$ var "x1" .$ var "x2"
+        , prf = Nothing
+        , flags = []
+        , clauses =
+            [ withClause
+                { lhs =
+                    withApp
+                      { fun =
+                             var "decEq"
+                          .$ (   var "MkMyCurse"
+                              .$ bindVar "x1"
+                              .$ bindVar "y1"
+                              .$ bindVar "pf1")
+                          .$ (   var "MkMyCurse"
+                              .$ bindVar "x1"
+                              .$ bindVar "y2"
+                              .$ bindVar "pf2")
+                      , arg = var "Yes" .$ var "Refl"
+                      }
+                , rig = MW
+                , wval = var "decEq" .$ var "y1" .$ var "y2"
+                , prf = Nothing
+                , flags = []
+                , clauses =
+                    [ withClause
+                        { lhs =
+                            withApp
+                              { fun =
+                                  withApp
+                                    { fun =
+                                           var "decEq"
+                                        .$ (   var "MkMyCurse"
+                                            .$ bindVar "x1"
+                                            .$ bindVar "y1"
+                                            .$ bindVar "pf1")
+                                        .$ (   var "MkMyCurse"
+                                            .$ bindVar "x1"
+                                            .$ bindVar "y1"
+                                            .$ bindVar "pf2")
+                                    , arg = var "Yes" .$ var "Refl"
+                                    }
+                              , arg = var "Yes" .$ var "Refl"
+                              }
+                        , rig = MW
+                        , wval = var "decEq" .$ var "pf1" .$ var "pf2"
+                        , prf = Nothing
+                        , flags = []
+                        , clauses =
+                            [    withApp
+                                   { fun =
+                                       withApp
+                                         { fun =
+                                             withApp
+                                               { fun =
+                                                      var "decEq"
+                                                   .$ (   var "MkMyCurse"
+                                                       .$ bindVar "x1"
+                                                       .$ bindVar "y1"
+                                                       .$ bindVar "pf1")
+                                                   .$ (   var "MkMyCurse"
+                                                       .$ bindVar "x1"
+                                                       .$ bindVar "y1"
+                                                       .$ bindVar "pf1")
+                                               , arg = var "Yes" .$ var "Refl"
+                                               }
+                                         , arg = var "Yes" .$ var "Refl"
+                                         }
+                                   , arg = var "Yes" .$ var "Refl"
+                                   }
+                              .= var "Yes" .$ var "Refl"
+                            ,    withApp
+                                   { fun =
+                                       withApp
+                                         { fun =
+                                             withApp
+                                               { fun =
+                                                      var "decEq"
+                                                   .$ (   var "MkMyCurse"
+                                                       .$ bindVar "x1"
+                                                       .$ bindVar "y1"
+                                                       .$ bindVar "pf1")
+                                                   .$ (   var "MkMyCurse"
+                                                       .$ bindVar "x1"
+                                                       .$ bindVar "y1"
+                                                       .$ bindVar "pf2")
+                                               , arg = var "Yes" .$ var "Refl"
+                                               }
+                                         , arg = var "Yes" .$ var "Refl"
+                                         }
+                                   , arg = var "No" .$ bindVar "prf"
+                                   }
+                              .=    var "No"
+                                 .$ (    MkArg
+                                           MW
+                                           ExplicitArg
+                                           (Just "h")
+                                           implicitFalse
+                                     .=>    var "prf"
+                                         .$ iCase
+                                              { sc = var "h"
+                                              , ty = implicitFalse
+                                              , clauses =
+                                                  [var "Refl" .= var "Refl"]
+                                              })
+                            ]
+                        }
+                    ,    withApp
+                           { fun =
+                               withApp
+                                 { fun =
+                                        var "decEq"
+                                     .$ (   var "MkMyCurse"
+                                         .$ bindVar "x1"
+                                         .$ bindVar "y1"
+                                         .$ bindVar "pf1")
+                                     .$ (   var "MkMyCurse"
+                                         .$ bindVar "x1"
+                                         .$ bindVar "y2"
+                                         .$ bindVar "pf2")
+                                 , arg = var "Yes" .$ var "Refl"
+                                 }
+                           , arg = var "No" .$ bindVar "prf"
+                           }
+                      .=    var "No"
+                         .$ (    MkArg MW ExplicitArg (Just "h") implicitFalse
+                             .=>    var "prf"
+                                 .$ iCase
+                                      { sc = var "h"
+                                      , ty = implicitFalse
+                                      , clauses = [var "Refl" .= var "Refl"]
+                                      })
+                    ]
+                }
+            ,    withApp
+                   { fun =
+                          var "decEq"
+                       .$ (   var "MkMyCurse"
+                           .$ bindVar "x1"
+                           .$ bindVar "y1"
+                           .$ bindVar "pf1")
+                       .$ (   var "MkMyCurse"
+                           .$ bindVar "x2"
+                           .$ bindVar "y2"
+                           .$ bindVar "pf2")
+                   , arg = var "No" .$ bindVar "prf"
+                   }
+              .=    var "No"
+                 .$ (    MkArg MW ExplicitArg (Just "h") implicitFalse
+                     .=>    var "prf"
+                         .$ iCase
+                              { sc = var "h"
+                              , ty = implicitFalse
+                              , clauses = [var "Refl" .= var "Refl"]
+                              })
+            ]
+        }
+    ]
+]
