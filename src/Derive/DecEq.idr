@@ -35,20 +35,41 @@ generateCases (x :: y :: xs) =
   let xfst'  = if conTySame y x then xfst ++ [(y, x)] else xfst in 
   (xfst ++) <$> if null xs then Just [(y, y)] else generateCases (y :: xs)
 
-appToName : String -> Name -> Name 
-appToName s (NS ns n) = NS ns (appToName s n)
-appToName s (UN (Basic str)) = UN (Basic (str ++ s))
-appToName s (UN (Field str)) = UN (Field (str ++ s))
-appToName s (UN Underscore) = UN Underscore --todo 
-appToName s (MN str i) = MN (str ++ s) i
-appToName s (DN str i) = DN (str ++ s) i
-appToName s (Nested i nm) = Nested i (appToName s nm)
-appToName s (CaseBlock str i) = CaseBlock (str ++ s) i
-appToName s (WithBlock str i) = WithBlock (str ++ s) i 
+appToName : String -> Maybe Name -> Name 
+appToName s (Just $ NS ns n) = NS ns (appToName s (Just n))
+appToName s (Just $ UN (Basic str)) = UN (Basic (str ++ s))
+appToName s (Just $ UN (Field str)) = UN (Field (str ++ s))
+appToName s (Just $ UN Underscore) = UN Underscore --todo 
+appToName s (Just $ MN str i) = MN (str ++ s) i
+appToName s (Just $ DN str i) = DN (str ++ s) i
+appToName s (Just $ Nested i nm) = Nested i (appToName s (Just nm))
+appToName s (Just $ CaseBlock str i) = CaseBlock (str ++ s) i
+appToName s (Just $ WithBlock str i) = WithBlock (str ++ s) i 
+appToName _ Nothing = UN Underscore 
 
 inConTy : {vs : Vect n Arg} -> Maybe Name -> Con n vs -> Bool 
 inConTy {vs=vs} (Just n) _ = any (\a => ttImpCouldBeSame (var n, a.type)) vs
 inConTy Nothing _ = False 
+
+-- getConstraints :: List IAnnParam -> List ITm
+-- getConstraints [] = []
+-- getConstraints (IAnnParam (v, ITyTy) _ : xs) = ITmCon "DecEq" [ITmVar v] : getConstraints xs
+-- getConstraints (IAnnParam (v, ITyFunc args) _ : xs) = getFuncConstraint v args [] [] : getConstraints xs
+-- getConstraints (_ : xs) = getConstraints xs
+
+-- getFuncConstraint :: String -> List (Maybe String, ITy) -> List (Maybe String, ITy) -> List String -> ITm
+-- getFuncConstraint fv args acc facc = case unsnoc args of
+--   Just (xs, x@(Just v, _)) -> getFuncConstraint fv xs (x : acc) (v : facc)
+--   Just (xs, (Nothing, _)) -> getFuncConstraint fv xs acc facc
+--   Nothing -> ITmTy (ITyFunc (acc ++ [(Nothing, ITyTm $ ITmCon "DecEq" [ITmFuncCall (ITmVar fv) (map ITmVar facc)])]))
+getFuncConstraint : Maybe Name -> TTImp -> TTImp -> List (Maybe Name, TTImp) -> List Name -> Arg 
+getFuncConstraint = ?wejfdk
+
+getConstraints : List Arg -> List Arg 
+getConstraints [] = []
+getConstraints (MkArg _ _ n (IType _) :: xs) = MkArg MW AutoImplicit Nothing (var "DecEq" .$ var (fromMaybe (UN Underscore) n)) :: getConstraints xs 
+getConstraints (MkArg _ _ n (IPi _ _ _ mn argTy retTy) :: xs) = getFuncConstraint mn argTy retTy [] [] :: getConstraints xs
+getConstraints (_ :: xs) = getConstraints xs 
 
 export %inline
 deriveDecEq : Elaboration m => TypeInfo -> m ()
@@ -59,8 +80,23 @@ deriveDecEq ti =
 		splitCons : {vs : Vect n Arg} -> Con n vs -> List (Maybe Name, Bool)
 		splitCons {vs = vs} c = toList $ map (\(MkArg _ _ n ty) => (n, not (ty == type) && not (inConTy n c))) (snd $ Data.Vect.filter (\(MkArg _ i _ _) => i == ExplicitArg) c.args)
 
-		mkConTm : String -> Con n vs -> TTImp 
-		mkConTm i c = var c.name .$ ?ewrjk
+		mkConTm : {vs : Vect n Arg} -> String -> Con n vs -> TTImp 
+		mkConTm i c = foldl (.$) (var c.name) (map (\(n, b) => if b then (var $ appToName i n) else (var $ fromMaybe (UN Underscore) n)) (splitCons c))
+
+		implicits = map (\(MkArg x _ n ty) => MkArg x ImplicitArg n ty) ti.args
+
+		mkClaim : ITy -> Decl 
+		mkClaim ty = IClaim (MkFCVal EmptyFC (MkIClaimData { 
+			rig = MW, 
+			vis = Export, 
+			opts = [Inline],
+			type = ty
+		}))
+
+		mkClaimTy : TTImp -> List Arg -> TTImp 
+		mkClaimTy = foldr (.->) 
+
+		
 	in 
 		?wjek
 
@@ -159,7 +195,7 @@ D1Info = MkTypeInfo
 
 x = `[ 
 	export %inline 
-	decEq : DecEq t => (a : D1 t) -> (b : D1 t) -> Dec (a = b)
+	decEq : {t : Type} -> DecEq t => (a : D1 t) -> (b : D1 t) -> Dec (a = b)
 	decEq (C1 x) (C1 y) with (decEq x y)
 		decEq (C1 x) (C1 x) | Yes Refl = Yes Refl 
 		decEq (C1 x) (C1 y) | No prf = No (\h => prf $ case h of Refl => Refl)
@@ -168,8 +204,8 @@ x = `[
 
 -- TODO pretty printer broken for IClaim
 y : List Decl
-y = [ IClaim (MkFCVal EmptyFC
-    (MkIClaimData
+y = [ IClaim
+    (MkFCVal EmptyFC (MkIClaimData
        { rig = MW
        , vis = Export
        , opts = [Inline]
@@ -177,9 +213,10 @@ y = [ IClaim (MkFCVal EmptyFC
            mkTy
              { name = "decEq"
              , type =
-                     MkArg MW AutoImplicit Nothing (var "DecEq" .$ bindVar "t")
-                 .-> MkArg MW ExplicitArg (Just "a") (var "D1" .$ bindVar "t")
-                 .-> MkArg MW ExplicitArg (Just "b") (var "D1" .$ bindVar "t")
+                     MkArg MW ImplicitArg (Just "t") type
+                 .-> MkArg MW AutoImplicit Nothing (var "DecEq" .$ var "t")
+                 .-> MkArg MW ExplicitArg (Just "a") (var "D1" .$ var "t")
+                 .-> MkArg MW ExplicitArg (Just "b") (var "D1" .$ var "t")
                  .->    var "Dec"
                      .$ alternative
                           { tpe = FirstSuccess
