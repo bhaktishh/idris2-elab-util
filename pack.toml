@@ -1,3 +1,7 @@
+[idris2]
+url="https://github.com/bhaktishh/Idris2"
+commit="latest:main"
+
 [custom.all.elab-util]
 type = "local"
 path = "."
