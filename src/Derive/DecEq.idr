@@ -183,5 +183,8 @@ deriveDecEq a = do
                     def (UN $ Basic "decEq") defn] (var "__mkDecEq" .$ type (arg (varStr "decEq")))
     logMsg "auto" 1 $ "interfaceHint claim: " ++ show fName ++ " : " ++ show clHint
     logMsg "auto" 1 $ "interfaceHint def: " ++ show (def fName [var fName .= impl ])
-    logMsg "auto" 1 $ show impl 
     declare [interfaceHint Public fName clHint, def fName [var fName .= impl ]]
+
+-- to use, %runElab deriveDecEq <Type>
+-- example: %runElab deriveDecEq Vect
+-- to check if it worked, :doc Vect should show a hint for DecEq
