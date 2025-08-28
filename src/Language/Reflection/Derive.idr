@@ -66,7 +66,7 @@ public export
 record BoundArg (n : Nat) (p : Arg -> Type) where
   constructor BA
   arg  : Arg
-  vars : Vect n String
+  vars : Vect n Name
   prf  : p arg
 
 public export
@@ -83,13 +83,13 @@ boundArgs :
      {0 p : Arg -> Type}
   -> (f : (a : Arg) -> Maybe (p a))
   -> Vect n Arg
-  -> Vect k (Vect n String)
+  -> Vect k (Vect n Name)
   -> SnocList (BoundArg k p)
 boundArgs f = go Lin
   where
     go :  SnocList (BoundArg k p)
        -> Vect m Arg
-       -> Vect k (Vect m String)
+       -> Vect k (Vect m Name)
        -> SnocList (BoundArg k p)
     go sx (x :: xs) ns =
       let (y, ys) := split ns

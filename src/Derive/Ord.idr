@@ -55,7 +55,7 @@ catchAll ci fun ti =
 
 parameters (nms : List Name)
   arg : BoundArg 2 Regular -> TTImp
-  arg (BA g [x,y] _) = assertIfRec nms g.type `(compare ~(varStr x) ~(varStr y))
+  arg (BA g [x,y] _) = assertIfRec nms g.type `(compare ~(var x) ~(var y))
 
   ||| Generates pattern match clauses for the constructors of
   ||| the given data type. `fun` is the name of the function we implement.

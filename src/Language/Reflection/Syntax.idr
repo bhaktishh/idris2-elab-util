@@ -139,14 +139,14 @@ varStr = var . fromString
 |||
 ||| This is an alias for `IBindVar EmptyFC`.
 public export %inline
-bindVar : String -> TTImp
+bindVar : Name -> TTImp
 bindVar = IBindVar EmptyFC
 
 ||| Bind a named value to a variable. This uses `nameStr` for
 ||| the variable's name.
 public export %inline
 (.bindVar) : Named a => a -> TTImp
-x.bindVar = bindVar x.nameStr
+x.bindVar = bindVar x.getName
 
 ||| Implicit value bound if unsolved
 |||
@@ -248,7 +248,7 @@ appNames fun = appAll fun . map var
 ||| Example: bindAll "MkPair" ["a","b"]
 |||          is the same as `(MkPair a b)
 public export %inline
-bindAll : (fun : Name) -> (args : List String) -> TTImp
+bindAll : (fun : Name) -> (args : List Name) -> TTImp
 bindAll fun = appAll fun . map bindVar
 
 ||| Alias for `IBindHere EmptyFC`

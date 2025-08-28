@@ -29,10 +29,10 @@ intImplDef d m impl =
 
 parameters (nms : List Name)
   div : BoundArg 2 Explicit -> TTImp
-  div (BA arg [x,y] _)  = `(div ~(varStr x) ~(varStr y))
+  div (BA arg [x,y] _)  = `(div ~(var x) ~(var y))
 
   mod : BoundArg 2 Explicit -> TTImp
-  mod (BA arg [x,y] _)  = `(mod ~(varStr x) ~(varStr y))
+  mod (BA arg [x,y] _)  = `(mod ~(var x) ~(var y))
 
   export
   divDef : Name -> Con n vs -> Decl

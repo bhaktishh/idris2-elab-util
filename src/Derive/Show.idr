@@ -72,7 +72,7 @@ parameters (nms : List Name)
   -- showing a single, explicit, unnamed constructor argument
   arg : BoundArg 1 Explicit -> TTImp
   arg (BA (MkArg M0 _ _ _) _   _) = primVal (Str " _")
-  arg (BA (MkArg _  _ _ t) [x] _) = assertIfRec nms t `(showArg ~(varStr x))
+  arg (BA (MkArg _  _ _ t) [x] _) = assertIfRec nms t `(showArg ~(var x))
 
   -- showing a constructor plus its arguments
   rhs : Name -> SnocList TTImp -> TTImp
@@ -86,7 +86,7 @@ parameters (nms : List Name)
      in case a.count of
        M0 => `(MkPair ~(nm) "_")
        _  =>
-         let shown := assertIfRec nms a.type `(show ~(varStr x))
+         let shown := assertIfRec nms a.type `(show ~(var x))
           in `(MkPair ~(nm) ~(shown))
 
   -- showing a constructor plus its named arguments

@@ -41,10 +41,10 @@ numImplDef p m fi impl =
   def impl [patClause (var impl) (appNames "MkNum" [p,m,fi])]
 
 plus : BoundArg 2 Explicit -> TTImp
-plus (BA arg [x,y] _)  = `(~(varStr x) + ~(varStr y))
+plus (BA arg [x,y] _)  = `(~(var x) + ~(var y))
 
 mult : BoundArg 2 Explicit -> TTImp
-mult (BA arg [x,y] _)  = `(~(varStr x) * ~(varStr y))
+mult (BA arg [x,y] _)  = `(~(var x) * ~(var y))
 
 fromInt : BoundArg 0 Explicit -> TTImp
 fromInt _ = `(fromInteger n)

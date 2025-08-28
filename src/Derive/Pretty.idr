@@ -53,7 +53,7 @@ parameters (nms : List Name)
   -- pretty printing a single, explicit, unnamed constructor argument
   arg : BoundArg 1 Explicit -> TTImp
   arg (BA (MkArg M0 _ _ _) _   _) = `(pretty US)
-  arg (BA (MkArg _  _ _ t) [x] _) = assertIfRec nms t `(prettyArg ~(varStr x))
+  arg (BA (MkArg _  _ _ t) [x] _) = assertIfRec nms t `(prettyArg ~(var x))
 
   -- prettying a constructor plus its arguments
   rhs : Name -> SnocList TTImp -> TTImp
@@ -65,7 +65,7 @@ parameters (nms : List Name)
     let nm := (argName a).namePrim
      in case a.count of
        M0 => `(prettyField ~(nm) US)
-       _  => assertIfRec nms a.type `(prettyField ~(nm) ~(varStr x))
+       _  => assertIfRec nms a.type `(prettyField ~(nm) ~(var x))
 
   -- prettying a constructor plus its named arguments
   nrhs : Name -> SnocList TTImp -> TTImp

@@ -233,13 +233,13 @@ name and generated list of fresh argument names in a tuple:
 ||| to be used in pattern match declarations
 public export
 ConNames : Type
-ConNames = (Name, List String, List TTImp)
+ConNames = (Name, List Name, List TTImp)
 
 private
 conNames : (c : Con n vs) -> ConNames
 conNames c =
   let ns   := toList $ freshNames "x" c.arty
-      vars := map varStr ns
+      vars := map var ns
    in (c.name, ns, vars)
 
 export
@@ -259,13 +259,7 @@ toClauses cs =
   -- determine on its own that the above list of clauses is covering.
   -- we therefore append an explicit `impossible` clause.
   [impossibleClause $ mkSOP1 (length cs) implicitTrue]
-```
 
-A quick note about function `nameStr`: Idris does not accept
-the machine-generated names of unnamed arguments in pattern matches.
-The function `nameStr` converts such names to similar user-defined names.
-
-```idris
 private
 genericDecl : TypeInfo -> List Decl
 genericDecl ti =

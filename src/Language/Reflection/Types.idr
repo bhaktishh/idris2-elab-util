@@ -28,13 +28,13 @@ Res = Either String
 ||| names. This function provides a pure way to do so without having
 ||| to run this in the `Elab` monad.
 export
-freshNames : String -> (n : Nat) -> Vect n String
+freshNames : String -> (n : Nat) -> Vect n Name
 freshNames s = go 0
 
   where
-    go : Nat -> (k : Nat) -> Vect k String
+    go : Nat -> (k : Nat) -> Vect k Name
     go m 0     = []
-    go m (S k) = (s ++ show m) :: go (S m) k
+    go m (S k) = (UN $ Basic $ s ++ show m) :: go (S m) k
 
 public export
 implicits : Foldable t => t Name -> List Arg
@@ -195,11 +195,11 @@ isConstant c = all isErased c.args
 ||| This is useful for implementing functions which pattern match on a
 ||| data constructor.
 export
-bindCon : (c : Con n vs) -> Vect c.arty String -> TTImp
+bindCon : (c : Con n vs) -> Vect c.arty Name -> TTImp
 bindCon c ns = go c.nameVar (map piInfo c.args) ns
 
   where
-    go : TTImp -> Vect k (PiInfo TTImp) -> Vect k String -> TTImp
+    go : TTImp -> Vect k (PiInfo TTImp) -> Vect k Name -> TTImp
     go t []                  []        = t
     go t (ExplicitArg :: xs) (n :: ns) = go (t `app` bindVar n) xs ns
     go t (_           :: xs) (n :: ns) = go t xs ns

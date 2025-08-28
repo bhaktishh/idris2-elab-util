@@ -127,7 +127,7 @@ rhs (sx :< x) = foldr (\e,acc => `(~(e) && ~(acc))) x sx
 
 parameters (nms : List Name)
   arg : BoundArg 2 Regular -> TTImp
-  arg (BA g [x,y] _) = assertIfRec nms g.type `(~(varStr x) == ~(varStr y))
+  arg (BA g [x,y] _) = assertIfRec nms g.type `(~(var x) == ~(var y))
 
   ||| Generates pattern match clauses for the constructors of
   ||| the given data type. `fun` is the name of the function we implement.

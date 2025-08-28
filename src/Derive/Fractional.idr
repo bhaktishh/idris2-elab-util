@@ -35,10 +35,10 @@ fractionalImplDef d r i =
   def i [patClause (var i) (appNames "MkFractional" [d, r])]
 
 div : BoundArg 2 Explicit -> TTImp
-div (BA arg [x,y] _)  = `(~(varStr x) / ~(varStr y))
+div (BA arg [x,y] _)  = `(~(var x) / ~(var y))
 
 recip : BoundArg 1 Explicit -> TTImp
-recip (BA arg [x] _)  = `(recip ~(varStr x))
+recip (BA arg [x] _)  = `(recip ~(var x))
 
 export
 divDef : Name -> Con n vs -> Decl
