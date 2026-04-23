@@ -11,6 +11,7 @@ depends    = base    >= 0.6.0
              , prettier
 
 modules = Derive.Abs
+        , Derive.DecEq
         , Derive.Eq
         , Derive.Fractional
         , Derive.FromChar

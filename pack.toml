@@ -1,6 +1,6 @@
 [idris2]
-url="https://github.com/bhaktishh/Idris2"
-commit="latest:main"
+type = "local" 
+path = "/Users/bs266/Documents/Idris2/build/exec/idris2"
 
 [custom.all.elab-util]
 type = "local"
