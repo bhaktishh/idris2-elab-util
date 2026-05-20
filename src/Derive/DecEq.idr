@@ -11,10 +11,8 @@ import Data.DPair
 import Data.List1
 import Data.SortedMap as M
 import Data.List.Quantifiers
-import Derive.Pretty 
 
 %default total
-%language ElabReflection
 
 appToName : String -> Name -> Name 
 appToName s (NS ns n) = NS ns (appToName s n)

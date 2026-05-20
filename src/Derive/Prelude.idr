@@ -1,7 +1,6 @@
 module Derive.Prelude
 
 import public Derive.Abs
-import public Derive.DecEq
 import public Derive.Eq
 import public Derive.Fractional
 import public Derive.FromChar
